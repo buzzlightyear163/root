@@ -86,6 +86,9 @@ h1 span{display:block;white-space:nowrap}
 .facts dt{font-size:13px;color:var(--muted)}
 .facts dd{margin-top:2px;font-weight:620;font-stretch:108%;font-variant-numeric:tabular-nums}
 .note .acts{display:flex;gap:10px;margin:26px 32px 0;flex-wrap:wrap}
+.note .links{display:flex;gap:18px;flex-wrap:wrap;margin:16px 32px 0;font-size:14px;color:var(--muted)}
+.note .links a{text-underline-offset:3px}
+.tag{display:inline-block;margin-left:10px;padding:1px 9px;border:1px solid var(--line);color:var(--line);font-size:13px;border-radius:999px;vertical-align:1px}
 
 .copies h3{font-weight:660;font-stretch:108%;font-size:18px}
 .copies > p{margin-top:4px;color:var(--muted);font-size:15px}

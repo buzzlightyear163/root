@@ -109,13 +109,23 @@ document.addEventListener('error', (e) => {
 const SHOW = 8;
 function copyRow(c, root) {
   const bigger = c.mcap && root.mcap && c.mcap > root.mcap;
+  const meta = [c.holders != null ? fmt.num(c.holders) + (c.holders === 1 ? ' holder' : ' holders') : '', c.mcap ? fmt.usd(c.mcap) + ' mcap' : ''].filter(Boolean).join(', ');
   return `<div class="copy" data-a="${esc(c.address)}">
     <div class="row"><b>${esc(c.name)}</b><span class="when">${fmt.delta(c.deltaMs)} after</span></div>
-    <div class="row"><code>${fmt.short(c.address)}</code><a href="${esc(c.url)}" target="_blank" rel="noopener">${c.mcap ? fmt.usd(c.mcap) + ' mcap' : 'DexScreener'}</a></div>
+    <div class="row"><code>${fmt.short(c.address)}</code><a href="${esc(c.url)}" target="_blank" rel="noopener">${esc(meta || 'DexScreener')}</a></div>
+    ${c.sameDev ? '<p class="warn">Launched by the root\'s own dev wallet. Still not the root.</p>' : ''}
     ${c.sameImage ? '<p class="warn clone">Same picture as the root. Straight clone.</p>' : ''}
     ${bigger ? '<p class="warn">Shows a bigger market cap than the root. Still a copy.</p>' : ''}
     <span class="stamp" aria-hidden="true">COPY</span>
   </div>`;
+}
+
+/* ---------- sharing ---------- */
+const shareUrl = (r) => location.origin + '/?q=' + encodeURIComponent(r.query);
+function shareIntent(r) {
+  const n = r.copies.length;
+  const text = `Which ${r.root.name} is the root?\n\nThe root: ${r.root.address}\nFirst seen ${fmt.day(r.root.firstSeen)}. ${n} ${n === 1 ? 'copy' : 'copies'} on Solana came after it.`;
+  return 'https://x.com/intent/post?text=' + encodeURIComponent(text) + '&url=' + encodeURIComponent(shareUrl(r));
 }
 
 function renderResult(r) {
@@ -132,32 +142,41 @@ function renderResult(r) {
           <div class="pic">${pic(root)}</div>
           <div>
             <h3>${esc(root.name)}</h3>
-            <p class="sym">$${esc(root.symbol)}${root.pumpfun ? ', born on pump.fun' : ''}</p>
+            <p class="sym">$${esc(root.symbol)}${root.pumpfun ? ', born on pump.fun' : ''}${root.verified ? '<span class="tag">Verified on Jupiter</span>' : ''}</p>
             <code class="serialno">${esc(root.address)}</code>
           </div>
         </div>
         <dl class="facts">
           <div><dt>First seen (UTC)</dt><dd>${fmt.date(root.firstSeen).replace(' UTC', '')}</dd></div>
-          <div><dt>Pools</dt><dd>${root.pairCount || '—'}</dd></div>
+          <div><dt>Holders</dt><dd>${fmt.num(root.holders)}</dd></div>
           <div><dt>Liquidity</dt><dd>${fmt.usd(root.liquidity)}</dd></div>
           <div><dt>Market cap</dt><dd>${fmt.usd(root.mcap)}</dd></div>
         </dl>
         <div class="acts">
           <button class="btn" type="button" id="copy-root">Copy contract</button>
-          <a class="btn ghost" href="${esc(root.url)}" target="_blank" rel="noopener">Open on DexScreener</a>
-          ${root.pumpfun ? `<a class="btn ghost" href="https://pump.fun/coin/${esc(root.address)}" target="_blank" rel="noopener">pump.fun</a>` : ''}
+          <a class="btn ghost" id="share-x" href="${esc(shareIntent(r))}" target="_blank" rel="noopener">Share on X</a>
+          <button class="btn ghost" type="button" id="copy-link">Copy link</button>
         </div>
+        <p class="links">
+          <a href="${esc(root.url)}" target="_blank" rel="noopener">DexScreener</a>
+          ${root.pumpfun ? `<a href="https://pump.fun/coin/${esc(root.address)}" target="_blank" rel="noopener">pump.fun</a>` : ''}
+          <a href="https://jup.ag/tokens/${esc(root.address)}" target="_blank" rel="noopener">Jupiter</a>
+          ${root.twitter ? `<a href="${esc(root.twitter)}" target="_blank" rel="noopener">The root's X</a>` : ''}
+        </p>
       </article>
       <div class="copies">
         <h3>Copies, oldest first</h3>
         <p>Same name or ticker, minted after the root.</p>
         <div id="copy-list">${n ? r.copies.slice(0, SHOW).map((c) => copyRow(c, root)).join('') : '<p class="none">Nothing else on Solana carries this name yet.</p>'}</div>
         ${n > SHOW ? `<button class="more" type="button" id="more">Show all ${n} copies</button>` : ''}
+        ${(r.dormant || []).length ? `<p class="elsewhere">${r.dormant.length} older ${r.dormant.length === 1 ? 'contract' : 'contracts'} used this name before the root and never ran: ${r.dormant.slice(0, 3).map((d) => `<a href="${esc(d.url)}" target="_blank" rel="noopener">${fmt.short(d.address)}</a>`).join(', ')}${r.dormant.length > 3 ? ' and more' : ''}. Not counted.</p>` : ''}
         ${r.otherChains.length ? `<p class="elsewhere">${r.otherChains.length} more on ${esc(chains.join(', '))}. Other chains are listed in the lineage, never bought.</p>` : ''}
       </div>
     </div>`;
   engrave($('#result .engrave'));
   $('#copy-root').addEventListener('click', (e) => copyText(root.address, e.currentTarget));
+  $('#copy-link').addEventListener('click', (e) => copyText(shareUrl(r), e.currentTarget));
+  document.title = r === ROOT.demo ? 'ROOT · Buys the root. Never the copy.' : `${root.name}: the root and ${n} ${n === 1 ? 'copy' : 'copies'} · ROOT`;
   const more = $('#more');
   if (more) more.addEventListener('click', () => { $('#copy-list').innerHTML = r.copies.map((c) => copyRow(c, root)).join(''); more.remove(); });
   ROOT.matchImages(r, (c) => {
@@ -218,7 +237,7 @@ async function go(q, opts) {
   btn.disabled = true;
   try {
     const r = await ROOT.find(q, { onStep: (s) => (st.textContent = s + '…') });
-    st.textContent = `Checked ${r.scanned} contracts. Root found.`;
+    st.textContent = `Checked ${r.scanned} contracts on DexScreener and Jupiter. Root found.`;
     render(r, true);
     const u = new URL(location.href); u.searchParams.set('q', q); history.replaceState(null, '', u);
     if (!(opts && opts.stay)) $('#result').scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
@@ -244,7 +263,7 @@ if (startQ) { $('#q').value = startQ; go(startQ, { stay: true }); }
 async function watch() {
   const list = $('#watch');
   let runners;
-  try { runners = await ROOT.runners(6); } catch (e) { list.innerHTML = '<li class="empty">DexScreener did not answer. Reload to check the runners again.</li>'; return; }
+  try { runners = await ROOT.runners(5); } catch (e) { list.innerHTML = '<li class="empty">DexScreener did not answer. Reload to check the runners again.</li>'; return; }
   if (!runners.length) { list.innerHTML = '<li class="empty">No boosted Solana runners right now.</li>'; return; }
   list.innerHTML = runners.map((t, i) => `<li class="pending" id="w${i}">
       <div class="ic">${t.icon ? `<img src="${esc(t.icon)}" alt="" loading="lazy" referrerpolicy="no-referrer" data-letter="?">` : '<b>?</b>'}</div>
@@ -253,7 +272,7 @@ async function watch() {
   for (let i = 0; i < runners.length; i++) {
     const t = runners[i], li = $('#w' + i);
     try {
-      const r = await ROOT.find(t.address);
+      const r = await ROOT.find(t.address, { quick: true });
       const self = [r.root, ...r.copies].find((c) => c.address === t.address) || r.root;
       const isRoot = r.root.address === t.address;
       const copies = r.copies.length;
@@ -269,7 +288,7 @@ async function watch() {
       li.querySelector('.sub').textContent = 'Could not date this one right now';
       li.querySelector('.verdict').textContent = 'Retry later';
     }
-    await new Promise((res) => setTimeout(res, 350));
+    await new Promise((res) => setTimeout(res, 600));
   }
 }
 const eio = new IntersectionObserver(([en]) => { if (en.isIntersecting) { watch(); eio.disconnect(); } }, { rootMargin: '400px' });

@@ -1,0 +1,9 @@
+{
+  "routes": [
+    { "src": "^/$", "dest": "/api/share" }
+  ],
+  "functions": {
+    "api/share.js": { "includeFiles": "index.html" },
+    "api/og.js": { "includeFiles": "og-assets/**", "memory": 1024, "maxDuration": 20 }
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "name": "root-finder",
+  "private": true,
+  "description": "ROOT: buys the root, never the copy.",
+  "dependencies": {
+    "@vercel/og": "0.6.8"
+  }
+}
