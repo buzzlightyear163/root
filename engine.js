@@ -13,8 +13,14 @@
     return m ? m[1] : null;
   };
 
+  // Direct to DexScreener first; if the browser can't reach it, go through our own /api/dex.
+  let viaProxy = false;
   async function getJSON(url) {
-    const r = await fetch(url, { headers: { accept: 'application/json' } });
+    let r;
+    if (!viaProxy) {
+      try { r = await fetch(url, { headers: { accept: 'application/json' } }); } catch (e) { viaProxy = true; }
+    }
+    if (viaProxy) r = await fetch('/api/dex?p=' + encodeURIComponent(url.slice(API.length)));
     if (r.status === 429) throw new Error('DexScreener is rate limiting. Try again in a minute.');
     if (!r.ok) throw new Error('DexScreener answered ' + r.status + '. Try again.');
     return r.json();
