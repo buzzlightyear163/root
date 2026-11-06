@@ -29,7 +29,7 @@
   function blank(chain, address, name, symbol) {
     return {
       address, chain, name, symbol,
-      image: null, firstSeen: null, liquidity: 0, volume24: 0, mcap: null,
+      image: null, firstSeen: null, liquidity: 0, volume24: 0, mcap: null, topLiq: -1,
       dexes: new Set(), pairs: new Set(),
       url: 'https://dexscreener.com/' + chain + '/' + address,
     };
@@ -45,10 +45,12 @@
       t.pairs.add(p.pairAddress);
       if (p.dexId) t.dexes.add(p.dexId);
       if (p.pairCreatedAt && (!t.firstSeen || p.pairCreatedAt < t.firstSeen)) t.firstSeen = p.pairCreatedAt;
-      t.liquidity += (p.liquidity && p.liquidity.usd) || 0;
+      const liq = (p.liquidity && p.liquidity.usd) || 0;
+      t.liquidity += liq;
       t.volume24 += (p.volume && p.volume.h24) || 0;
+      // Market cap from the deepest pool: thin pools with odd quote tokens report nonsense.
       const mc = p.marketCap || p.fdv;
-      if (mc && (!t.mcap || mc > t.mcap)) t.mcap = mc;
+      if (mc && (t.mcap == null || liq > t.topLiq)) { t.mcap = mc; t.topLiq = liq; }
       const img = p.info && p.info.imageUrl;
       if (img && !t.image) t.image = img;
     }
