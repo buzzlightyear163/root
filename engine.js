@@ -1,15 +1,13 @@
 /* ROOT engine: finds the original contract behind any name.
-   DexScreener (public API, no key) + pump.fun search through /api/pump (no key). */
+   DexScreener public API, no key. Coins still on the pump.fun curve are listed there too. */
 (function () {
   const API = 'https://api.dexscreener.com';
   const B58 = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
   const EVM = /^0x[a-fA-F0-9]{40}$/;
 
   const norm = (s) => (s || '').toLowerCase().normalize('NFKD').replace(/[^a-z0-9]/g, '');
-  // DexScreener CMS images and pump.fun IPFS images are content-addressed: same file, same key.
-  const imgKey = (url) => {
-    if (!url) return null;
-    const m = url.match(/\/cms\/images\/([a-f0-9]{32,})/i) || url.match(/\/ipfs\/([a-zA-Z0-9]{40,})/);
+  const imgId = (url) => {
+    const m = url && url.match(/\/cms\/images\/([A-Za-z0-9_-]{8,80})/);
     return m ? m[1] : null;
   };
 
@@ -27,17 +25,12 @@
   }
   const search = (q) => getJSON(API + '/latest/dex/search?q=' + encodeURIComponent(q)).then((d) => d.pairs || []);
   const tokens = (chain, addrs) => getJSON(API + '/tokens/v1/' + chain + '/' + addrs.join(',')).then((d) => (Array.isArray(d) ? d : []));
-  const pump = (q) =>
-    fetch('/api/pump?q=' + encodeURIComponent(q))
-      .then((r) => (r.ok ? r.json() : { coins: [] }))
-      .then((d) => d.coins || [])
-      .catch(() => []);
 
   function blank(chain, address, name, symbol) {
     return {
       address, chain, name, symbol,
-      image: null, keys: new Set(), firstSeen: null, liquidity: 0, volume24: 0, mcap: null,
-      dexes: new Set(), pairs: new Set(), onPump: false,
+      image: null, firstSeen: null, liquidity: 0, volume24: 0, mcap: null,
+      dexes: new Set(), pairs: new Set(),
       url: 'https://dexscreener.com/' + chain + '/' + address,
     };
   }
@@ -57,35 +50,20 @@
       const mc = p.marketCap || p.fdv;
       if (mc && (!t.mcap || mc > t.mcap)) t.mcap = mc;
       const img = p.info && p.info.imageUrl;
-      if (img) { if (!t.image) t.image = img; const k = imgKey(img); if (k) t.keys.add(k); }
-    }
-    return map;
-  }
-
-  function foldPump(coins, map) {
-    for (const c of coins) {
-      if (!c || !c.mint) continue;
-      const key = 'solana:' + c.mint;
-      let t = map.get(key);
-      if (!t) map.set(key, (t = blank('solana', c.mint, c.name, c.symbol)));
-      t.onPump = true;
-      t.dexes.add('pumpfun');
-      if (c.created && (!t.firstSeen || c.created < t.firstSeen)) t.firstSeen = c.created;
-      if (c.mcap && !t.mcap) t.mcap = c.mcap;
-      if (c.image) { if (!t.image) t.image = c.image; const k = imgKey(c.image); if (k) t.keys.add(k); }
+      if (img && !t.image) t.image = img;
     }
     return map;
   }
 
   function finish(t, root) {
-    const shared = root && t !== root && [...t.keys].some((k) => root.keys.has(k));
+    const same = root && t !== root && imgId(t.image) && imgId(t.image) === imgId(root.image);
     return {
       address: t.address, chain: t.chain, name: t.name, symbol: t.symbol, image: t.image,
       firstSeen: t.firstSeen, liquidity: t.liquidity || null, volume24: t.volume24 || null, mcap: t.mcap,
       dexes: [...t.dexes], pairCount: t.pairs.size, url: t.url,
       deltaMs: root && t.firstSeen && root.firstSeen ? t.firstSeen - root.firstSeen : 0,
-      sameImage: !!shared,
-      pumpfun: t.onPump || /pump$/.test(t.address) || t.dexes.has('pumpfun'),
+      sameImage: !!same,
+      pumpfun: /pump$/.test(t.address) || t.dexes.has('pumpfun'),
     };
   }
 
@@ -122,11 +100,7 @@
       const nq = norm(q);
       let seeds = [...map.values()].filter((t) => norm(t.symbol) === nq || norm(t.name) === nq);
       if (!seeds.length) seeds = [...map.values()].filter((t) => norm(t.symbol).includes(nq) || norm(t.name).includes(nq));
-      if (!seeds.length) {
-        const pc = await pump(q);
-        if (pc.length) { foldPump(pc, map); seeds = [...map.values()]; }
-      }
-      if (!seeds.length) throw new Error('Nothing on DexScreener or pump.fun matches “' + q + '”.');
+      if (!seeds.length) throw new Error('Nothing on DexScreener matches “' + q + '”.');
       seeds.sort((a, b) => b.liquidity - a.liquidity || (b.mcap || 0) - (a.mcap || 0));
       lead = seeds[0];
       names = new Set([nq]);
@@ -137,9 +111,7 @@
 
     step('Pulling every coin named ' + lead.name);
     await Promise.all([run(lead.symbol), run(lead.name)].map((p) => p.catch(() => {})));
-    const [p1, p2] = await Promise.all([pump(lead.symbol), norm(lead.name) !== norm(lead.symbol) ? pump(lead.name) : []]);
     const inFamily = (n, s) => ids.has(norm(n)) || ids.has(norm(s));
-    foldPump(p1.concat(p2).filter((c) => inFamily(c.name, c.symbol)), map);
 
     const family = [...map.values()].filter((t) => inFamily(t.name, t.symbol));
 
@@ -165,6 +137,41 @@
       copies: local.slice(1).map((t) => finish(t, root)),
       otherChains: other.map((t) => finish(t, root)),
     };
+  }
+
+  /* Same picture: 64-bit difference hash of each thumbnail, fetched same-origin through /api/img. */
+  function hashImage(url) {
+    const id = imgId(url);
+    if (!id) return Promise.resolve(null);
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        try {
+          const c = document.createElement('canvas'); c.width = 9; c.height = 8;
+          const g = c.getContext('2d'); g.drawImage(img, 0, 0, 9, 8);
+          const d = g.getImageData(0, 0, 9, 8).data;
+          const lum = (i) => d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114;
+          let bits = '';
+          for (let y = 0; y < 8; y++) for (let x = 0; x < 8; x++) { const i = (y * 9 + x) * 4; bits += lum(i) > lum(i + 4) ? '1' : '0'; }
+          resolve(bits);
+        } catch (e) { resolve(null); }
+      };
+      img.onerror = () => resolve(null);
+      img.src = '/api/img?id=' + encodeURIComponent(id);
+    });
+  }
+  /** Flags copies whose picture matches the root's. Calls onMatch(copy) for each one. */
+  async function matchImages(r, onMatch) {
+    const base = await hashImage(r.root.image);
+    if (!base) return;
+    for (const c of r.copies) {
+      if (!c.image || c.sameImage) { if (c.sameImage) onMatch(c); continue; }
+      const h = await hashImage(c.image);
+      if (!h) continue;
+      let diff = 0;
+      for (let i = 0; i < 64; i++) if (h[i] !== base[i]) diff++;
+      if (diff <= 10) { c.sameImage = true; onMatch(c); }
+    }
   }
 
   /** The runners DexScreener is being paid to push right now (Solana only). */
@@ -216,5 +223,5 @@
     day: (ms) => (ms ? new Date(ms).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }) : 'unknown'),
   };
 
-  window.ROOT = { find, runners, demo, fmt, norm };
+  window.ROOT = { find, runners, matchImages, demo, fmt, norm };
 })();

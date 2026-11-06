@@ -109,10 +109,10 @@ document.addEventListener('error', (e) => {
 const SHOW = 8;
 function copyRow(c, root) {
   const bigger = c.mcap && root.mcap && c.mcap > root.mcap;
-  return `<div class="copy">
+  return `<div class="copy" data-a="${esc(c.address)}">
     <div class="row"><b>${esc(c.name)}</b><span class="when">${fmt.delta(c.deltaMs)} after</span></div>
     <div class="row"><code>${fmt.short(c.address)}</code><a href="${esc(c.url)}" target="_blank" rel="noopener">${c.mcap ? fmt.usd(c.mcap) + ' mcap' : 'DexScreener'}</a></div>
-    ${c.sameImage ? '<p class="warn">Same image file as the root. Straight clone.</p>' : ''}
+    ${c.sameImage ? '<p class="warn clone">Same picture as the root. Straight clone.</p>' : ''}
     ${bigger ? '<p class="warn">Shows a bigger market cap than the root. Still a copy.</p>' : ''}
     <span class="stamp" aria-hidden="true">COPY</span>
   </div>`;
@@ -160,6 +160,10 @@ function renderResult(r) {
   $('#copy-root').addEventListener('click', (e) => copyText(root.address, e.currentTarget));
   const more = $('#more');
   if (more) more.addEventListener('click', () => { $('#copy-list').innerHTML = r.copies.map((c) => copyRow(c, root)).join(''); more.remove(); });
+  ROOT.matchImages(r, (c) => {
+    const row = $(`.copy[data-a="${CSS.escape(c.address)}"]`);
+    if (row && !row.querySelector('.clone')) row.querySelector('.row:nth-child(2)').insertAdjacentHTML('afterend', '<p class="warn clone">Same picture as the root. Straight clone.</p>');
+  }).catch(() => {});
 }
 
 /* ---------- lineage: time after the root, log scale ---------- */

@@ -95,12 +95,12 @@
     <section class="method" id="method">
       <h2>How the root is dated</h2>
       <ol class="steps">
-        <li><b>Every contract with the name</b><p>ROOT searches DexScreener for the name and the ticker, then pump.fun for every coin carrying either one, oldest first.</p></li>
-        <li><b>Every pool it ever opened</b><p>For each contract it pulls every pool DexScreener has seen. The earliest pool, or the pump.fun mint time, is that contract's birth.</p></li>
+        <li><b>Every contract with the name</b><p>ROOT searches DexScreener for the name and the ticker, including coins still on the pump.fun curve, then searches again under the exact name of the biggest match.</p></li>
+        <li><b>Every pool it ever opened</b><p>For each contract it pulls every pool DexScreener has seen, the pump.fun curve included. The earliest one is that contract's birth.</p></li>
         <li><b>Oldest wins</b><p>Sorted by birth, the first contract is the root. Everything after it is a copy, however big its market cap looks.</p></li>
-        <li><b>Same picture gets flagged</b><p>Images on DexScreener and pump.fun are stored by content. A copy that reuses the exact same file is marked as a straight clone.</p></li>
+        <li><b>Same picture gets flagged</b><p>Each copy's picture is compared with the root's, pixel by pixel at thumbnail size. A near-identical picture marks it as a straight clone.</p></li>
       </ol>
-      <p class="fine">Only Solana counts. Contracts with the same name on other chains are listed and never bought. Data comes from public DexScreener and pump.fun endpoints, no keys.</p>
+      <p class="fine">Only Solana counts. Contracts with the same name on other chains are listed and never bought. Data comes from DexScreener's public API, no keys.</p>
     </section>
   </div>
 
@@ -133,7 +133,7 @@
 <div class="micro" aria-hidden="true" data-micro="the root is the first contract ever minted under a name, every contract after it is a copy, "></div>
 <footer class="wrap foot">
   <span>ROOT. Buys the root. Never the copy.</span>
-  <span>Data: DexScreener and pump.fun public endpoints. Nothing here is financial advice.</span>
+  <span>Data: DexScreener public API. Nothing here is financial advice.</span>
 </footer>
 
 <script src="/engine.js"></script>
