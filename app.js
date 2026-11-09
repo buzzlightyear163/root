@@ -1,6 +1,6 @@
 /* ROOT site. Fill in SITE when $ROOT is live. */
 const SITE = {
-  ca: '',   // $ROOT contract address. Empty = the contract row stays hidden.
+  ca: 'Dev3WUssETiNETx7dxd9dRkLYnJds9RgyJoREgarpump',   // $ROOT contract address. Empty = the contract row stays hidden.
   x: '',    // X profile URL, e.g. https://x.com/yourhandle
 };
 
